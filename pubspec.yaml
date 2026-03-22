@@ -1,0 +1,60 @@
+name: autolog
+description: Digitales Fahrtenbuch – erfasse Fahrten, Kilometer und Abrechnungsstatus.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Local storage
+  hive_flutter: ^1.1.0
+
+  # Unique IDs
+  uuid: ^4.4.0
+
+  # Date formatting
+  intl: ^0.19.0
+
+  # PDF export
+  pdf: ^3.11.1
+  printing: ^5.13.1
+
+  # CSV
+  csv: ^6.0.0
+
+  # File sharing / saving
+  share_plus: ^10.0.3
+  path_provider: ^2.1.4
+
+  # File picker (JSON import)
+  file_picker: ^8.1.4
+
+  # Image handling
+  image_picker: ^1.1.2
+  flutter_image_compress: ^2.3.0
+
+  # Launch Google Maps
+  url_launcher: ^6.3.1
+
+  # Local notifications
+  flutter_local_notifications: ^17.2.4
+
+  # Encrypted key storage (für Hive-Verschlüsselung)
+  flutter_secure_storage: ^9.2.4
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
