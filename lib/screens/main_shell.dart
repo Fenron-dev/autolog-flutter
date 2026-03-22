@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
@@ -8,6 +9,7 @@ import 'planned_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/trip_form.dart';
 import '../models/models.dart';
+import '../services/auto_detect_service.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
@@ -18,6 +20,99 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
+  StreamSubscription<AutoDetectEvent>? _detectSub;
+  TripStartDetected? _pendingTripStart;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settings = ref.read(settingsProvider);
+      AutoDetectService.instance.startMonitoring(settings);
+      _detectSub = AutoDetectService.instance.events.listen(_handleDetectEvent);
+    });
+  }
+
+  @override
+  void dispose() {
+    _detectSub?.cancel();
+    AutoDetectService.instance.stopMonitoring();
+    super.dispose();
+  }
+
+  void _handleDetectEvent(AutoDetectEvent event) {
+    if (event is TripStartDetected) {
+      _pendingTripStart = event;
+      if (!event.autoRecord) {
+        _showTripDetectedDialog(event);
+      }
+    } else if (event is TripEndDetected) {
+      final start = _pendingTripStart;
+      _pendingTripStart = null;
+      if (start != null && start.autoRecord) {
+        _autoSaveTrip(start, event);
+      }
+    }
+  }
+
+  void _showTripDetectedDialog(TripStartDetected event) {
+    if (!mounted) return;
+    final source = event.source == 'gps' ? 'GPS-Geschwindigkeit' : 'Bluetooth-Verbindung';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fahrt erkannt'),
+        content: Text('$source hat eine mögliche Fahrt erkannt (${event.startTime} Uhr). Jetzt aufzeichnen?'),
+        actions: [
+          TextButton(
+            onPressed: () { Navigator.pop(ctx); _pendingTripStart = null; },
+            child: const Text('Ignorieren'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showTripFormWithPrefilledTime(event);
+            },
+            child: const Text('Aufzeichnen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTripFormWithPrefilledTime(TripStartDetected event) {
+    // Create a partial trip with just the start info pre-filled
+    // The user completes destination, distance etc. in the form
+    _showTripForm();
+  }
+
+  void _autoSaveTrip(TripStartDetected start, TripEndDetected end) {
+    final notifier = ref.read(tripsProvider.notifier);
+    final source = start.source == 'gps' ? 'GPS' : 'Bluetooth';
+    notifier.addTrip(Trip(
+      id: '',
+      date: start.startDate,
+      startTime: start.startTime,
+      endTime: end.endTime,
+      destinationName: 'Erkannte Fahrt ($source)',
+      destinationAddress: '',
+      distanceKm: end.distanceKm > 0 ? end.distanceKm : 0,
+      type: TripType.business,
+      status: TripStatus.completed,
+      isBilled: false,
+      isLogged: false,
+      notes: 'Automatisch erfasst via $source',
+      vehicleId: null,
+    ));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fahrt automatisch gespeichert (${end.distanceKm.toStringAsFixed(1)} km)'),
+          action: SnackBarAction(label: 'Bearbeiten', onPressed: () {}),
+        ),
+      );
+    }
+  }
 
   void _showTripForm({Trip? trip}) {
     showModalBottomSheet(
@@ -45,6 +140,15 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final tripsState = ref.watch(tripsProvider);
+
+    ref.listen(settingsProvider, (prev, next) {
+      if (prev?.speedDetectionEnabled != next.speedDetectionEnabled ||
+          prev?.speedThresholdKmh != next.speedThresholdKmh ||
+          prev?.bluetoothDetectionEnabled != next.bluetoothDetectionEnabled ||
+          prev?.bluetoothDeviceAddress != next.bluetoothDeviceAddress) {
+        AutoDetectService.instance.restartMonitoring(next);
+      }
+    });
 
     final screens = [
       DashboardScreen(onNewTrip: () => _showTripForm(), onEditTrip: (t) => _showTripForm(trip: t)),

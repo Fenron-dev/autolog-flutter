@@ -46,6 +46,11 @@ dependencies:
   # Local notifications
   flutter_local_notifications: ^17.2.4
 
+  # Auto-detection (GPS + Bluetooth)
+  geolocator: ^13.0.0
+  flutter_blue_plus: ^1.35.5
+  permission_handler: ^11.3.1
+
   # Encrypted key storage (für Hive-Verschlüsselung)
   flutter_secure_storage: ^9.2.4
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../providers/providers.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
@@ -168,6 +170,70 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
+          // GPS Detection
+          _SectionCard(
+            title: 'GPS-Fahrtenerkennung',
+            trailing: Switch(
+              value: settings.speedDetectionEnabled,
+              onChanged: (v) async {
+                if (v) {
+                  final status = await Permission.locationWhenInUse.request();
+                  if (!status.isGranted) return;
+                  await Permission.locationAlways.request();
+                }
+                ref.read(settingsProvider.notifier).updateSettings(
+                  settings.copyWith(speedDetectionEnabled: v),
+                );
+              },
+              activeThumbColor: Colors.blue,
+            ),
+            child: settings.speedDetectionEnabled
+                ? _SpeedDetectionConfig(
+                    threshold: settings.speedThresholdKmh,
+                    autoRecord: settings.speedAutoRecord,
+                    onThresholdChanged: (v) => ref.read(settingsProvider.notifier)
+                        .updateSettings(settings.copyWith(speedThresholdKmh: v)),
+                    onAutoRecordChanged: (v) => ref.read(settingsProvider.notifier)
+                        .updateSettings(settings.copyWith(speedAutoRecord: v)),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 12),
+
+          // Bluetooth Detection
+          _SectionCard(
+            title: 'Bluetooth-Fahrtenerkennung',
+            trailing: Switch(
+              value: settings.bluetoothDetectionEnabled,
+              onChanged: (v) async {
+                if (v) {
+                  await Permission.bluetoothConnect.request();
+                  await Permission.bluetoothScan.request();
+                }
+                ref.read(settingsProvider.notifier).updateSettings(
+                  settings.copyWith(bluetoothDetectionEnabled: v),
+                );
+              },
+              activeThumbColor: Colors.blue,
+            ),
+            child: settings.bluetoothDetectionEnabled
+                ? _BluetoothDetectionConfig(
+                    deviceName: settings.bluetoothDeviceName,
+                    autoRecord: settings.bluetoothAutoRecord,
+                    onDeviceSelected: (name, address) =>
+                        ref.read(settingsProvider.notifier).updateSettings(
+                          settings.copyWith(
+                            bluetoothDeviceName: name,
+                            bluetoothDeviceAddress: address,
+                          ),
+                        ),
+                    onAutoRecordChanged: (v) => ref.read(settingsProvider.notifier)
+                        .updateSettings(settings.copyWith(bluetoothAutoRecord: v)),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 12),
+
           // Export & Import
           _SectionCard(
             title: 'Daten & Export',
@@ -328,6 +394,178 @@ class _ReminderConfig extends StatelessWidget {
             },
           );
         }),
+      ),
+    ]);
+  }
+}
+
+class _SpeedDetectionConfig extends StatelessWidget {
+  final double threshold;
+  final bool autoRecord;
+  final void Function(double) onThresholdChanged;
+  final void Function(bool) onAutoRecordChanged;
+
+  const _SpeedDetectionConfig({
+    required this.threshold,
+    required this.autoRecord,
+    required this.onThresholdChanged,
+    required this.onAutoRecordChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(Icons.speed_outlined, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Text('Schwellenwert: ${threshold.toStringAsFixed(0)} km/h',
+            style: const TextStyle(fontSize: 13)),
+      ]),
+      Slider(
+        value: threshold,
+        min: 10,
+        max: 80,
+        divisions: 14,
+        label: '${threshold.toStringAsFixed(0)} km/h',
+        activeColor: Colors.blue,
+        onChanged: onThresholdChanged,
+      ),
+      Row(children: [
+        const Expanded(child: Text('Bei Erkennung', style: TextStyle(fontSize: 13))),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Nachfragen', style: TextStyle(fontSize: 11))),
+            ButtonSegment(value: true, label: Text('Automatisch', style: TextStyle(fontSize: 11))),
+          ],
+          selected: {autoRecord},
+          onSelectionChanged: (v) => onAutoRecordChanged(v.first),
+          style: SegmentedButton.styleFrom(
+            selectedBackgroundColor: Colors.blue,
+            selectedForegroundColor: Colors.white,
+          ),
+        ),
+      ]),
+      Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Text(
+          'Die App erkennt Fahrten wenn du schneller als ${threshold.toStringAsFixed(0)} km/h fährst.',
+          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _BluetoothDetectionConfig extends StatefulWidget {
+  final String deviceName;
+  final bool autoRecord;
+  final void Function(String name, String address) onDeviceSelected;
+  final void Function(bool) onAutoRecordChanged;
+
+  const _BluetoothDetectionConfig({
+    required this.deviceName,
+    required this.autoRecord,
+    required this.onDeviceSelected,
+    required this.onAutoRecordChanged,
+  });
+
+  @override
+  State<_BluetoothDetectionConfig> createState() => _BluetoothDetectionConfigState();
+}
+
+class _BluetoothDetectionConfigState extends State<_BluetoothDetectionConfig> {
+  List<BluetoothDevice> _bondedDevices = [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDevices();
+  }
+
+  Future<void> _loadDevices() async {
+    setState(() => _loading = true);
+    try {
+      final devices = await FlutterBluePlus.bondedDevices;
+      if (mounted) setState(() => _bondedDevices = devices);
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Expanded(
+          child: Text('Fahrzeug-Bluetooth', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.refresh_outlined, size: 18),
+          tooltip: 'Geräteliste aktualisieren',
+          onPressed: _loadDevices,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        ),
+      ]),
+      if (_loading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+        )
+      else if (_bondedDevices.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text('Keine gekoppelten Geräte gefunden.',
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        )
+      else
+        DropdownButton<BluetoothDevice>(
+          isExpanded: true,
+          hint: const Text('Gerät wählen', style: TextStyle(fontSize: 13)),
+          value: _bondedDevices.where((d) => d.platformName == widget.deviceName).firstOrNull,
+          items: _bondedDevices.map((d) => DropdownMenuItem(
+            value: d,
+            child: Text(d.platformName.isEmpty ? d.remoteId.str : d.platformName,
+                style: const TextStyle(fontSize: 13)),
+          )).toList(),
+          onChanged: (d) {
+            if (d != null) {
+              widget.onDeviceSelected(
+                d.platformName.isEmpty ? d.remoteId.str : d.platformName,
+                d.remoteId.str,
+              );
+            }
+          },
+        ),
+      if (widget.deviceName.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            const Icon(Icons.bluetooth_connected_outlined, size: 14, color: Colors.blue),
+            const SizedBox(width: 4),
+            Text(widget.deviceName, style: const TextStyle(fontSize: 12, color: Colors.blue)),
+          ]),
+        ),
+      Row(children: [
+        const Expanded(child: Text('Bei Verbindung', style: TextStyle(fontSize: 13))),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Nachfragen', style: TextStyle(fontSize: 11))),
+            ButtonSegment(value: true, label: Text('Automatisch', style: TextStyle(fontSize: 11))),
+          ],
+          selected: {widget.autoRecord},
+          onSelectionChanged: (v) => widget.onAutoRecordChanged(v.first),
+          style: SegmentedButton.styleFrom(
+            selectedBackgroundColor: Colors.blue,
+            selectedForegroundColor: Colors.white,
+          ),
+        ),
+      ]),
+      Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Text(
+          'Fahrt wird erkannt wenn sich "${widget.deviceName.isEmpty ? 'das gewählte Gerät' : widget.deviceName}" verbindet.',
+          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
       ),
     ]);
   }
