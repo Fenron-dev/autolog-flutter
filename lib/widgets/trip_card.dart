@@ -91,18 +91,18 @@ class TripCard extends StatelessWidget {
               children: [
                 if (isBusiness)
                   Expanded(
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      _ToggleChip(
+                    child: Row(children: [
+                      Flexible(child: _ToggleChip(
                         label: 'Abgerechnet',
                         active: trip.isBilled,
                         onTap: () => onToggle('isBilled', !trip.isBilled),
-                      ),
+                      )),
                       const SizedBox(width: 8),
-                      _ToggleChip(
+                      Flexible(child: _ToggleChip(
                         label: 'Eingetragen',
                         active: trip.isLogged,
                         onTap: () => onToggle('isLogged', !trip.isLogged),
-                      ),
+                      )),
                     ]),
                   )
                 else
@@ -140,7 +140,7 @@ class _ToggleChip extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(active ? Icons.check_circle : Icons.radio_button_unchecked, size: 16, color: active ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant),
         const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))),
       ]),
     );
   }

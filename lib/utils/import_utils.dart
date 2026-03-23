@@ -136,20 +136,18 @@ List<Trip> _parseSemanticSegments(List<dynamic> segments) {
             default:
               break;
           }
-          // Koordinaten aus visit-Segment als Adresse
-          if (destName.isEmpty) {
-            final placeLocation = topC?['placeLocation'] as Map<String, dynamic>?;
-            final latLng = placeLocation?['latLng'] as String?;
-            if (latLng != null) destAddress = _latLngToLabel(latLng);
-          }
+          // Koordinaten aus visit-Segment als Adresse (plain lat,lng für Maps-Link)
+          final placeLocation = topC?['placeLocation'] as Map<String, dynamic>?;
+          final latLng = placeLocation?['latLng'] as String?;
+          if (latLng != null) destAddress = _latLngToPlain(latLng);
         }
       }
     }
 
     // Fallback: Koordinaten aus activity.end
-    if (destName.isEmpty && destAddress.isEmpty) {
+    if (destAddress.isEmpty) {
       final endLatLng = activity['end']?['latLng'] as String?;
-      if (endLatLng != null) destAddress = _latLngToLabel(endLatLng);
+      if (endLatLng != null) destAddress = _latLngToPlain(endLatLng);
     }
 
     trips.add(Trip(
@@ -228,14 +226,13 @@ List<Trip> _parseTimelineObjects(List<dynamic> objects) {
 String _formatTime(DateTime dt) =>
     '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-String _latLngToLabel(String latLng) {
-  // "51.1234567, 13.1234567" → "51.12°N 13.12°E"
+/// "51.1234567, 13.1234567" → "51.123456,13.123456" (Google Maps kompatibel)
+String _latLngToPlain(String latLng) {
   final parts = latLng.split(',');
-  if (parts.length != 2) return latLng;
+  if (parts.length != 2) return latLng.trim();
   final lat = double.tryParse(parts[0].trim());
   final lng = double.tryParse(parts[1].trim());
-  if (lat == null || lng == null) return latLng;
-  final latStr = '${lat.abs().toStringAsFixed(4)}°${lat >= 0 ? 'N' : 'S'}';
-  final lngStr = '${lng.abs().toStringAsFixed(4)}°${lng >= 0 ? 'E' : 'W'}';
-  return '$latStr $lngStr';
+  if (lat == null || lng == null) return latLng.trim();
+  return '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
 }
+
