@@ -172,7 +172,6 @@ class _MainShellState extends ConsumerState<MainShell> {
       bottomNavigationBar: BottomAppBar(
         color: Theme.of(context).colorScheme.surface,
         elevation: 8,
-        height: 64,
         notchMargin: 8,
         shape: const CircularNotchedRectangle(),
         child: Row(

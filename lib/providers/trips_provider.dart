@@ -167,6 +167,18 @@ class TripsNotifier extends StateNotifier<TripsState> {
     addTrip(returnTrip);
   }
 
+  void bulkUpdate(List<String> ids, {bool? isBilled, bool? isLogged}) {
+    final trips = _all.map((t) {
+      if (!ids.contains(t.id)) return t;
+      return t.copyWith(
+        isBilled: isBilled ?? t.isBilled,
+        isLogged: isLogged ?? t.isLogged,
+      );
+    }).toList();
+    state = _compute(trips);
+    _save(trips);
+  }
+
   void loadTrips(List<Trip> trips) {
     state = _compute(trips);
     _save(trips);
