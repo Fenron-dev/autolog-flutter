@@ -175,20 +175,19 @@ class _MainShellState extends ConsumerState<MainShell> {
         notchMargin: 8,
         shape: const CircularNotchedRectangle(),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _NavItem(icon: Icons.dashboard_outlined, label: 'Dashboard', index: 0, current: _currentIndex, onTap: (i) => setState(() => _currentIndex = i)),
-            _NavItem(
+            Expanded(child: _NavItem(icon: Icons.dashboard_outlined, label: 'Dashboard', index: 0, current: _currentIndex, onTap: (i) => setState(() => _currentIndex = i))),
+            Expanded(child: _NavItem(
               icon: Icons.calendar_today_outlined,
               label: 'Geplant',
               index: 1,
               current: _currentIndex,
               onTap: (i) => setState(() => _currentIndex = i),
               badge: tripsState.plannedCount > 0 ? tripsState.plannedCount : null,
-            ),
+            )),
             const SizedBox(width: 48), // FAB gap
-            _NavItem(icon: Icons.history_outlined, label: 'Historie', index: 2, current: _currentIndex, onTap: (i) => setState(() => _currentIndex = i)),
-            _NavItem(icon: Icons.settings_outlined, label: 'Einstellungen', index: 3, current: _currentIndex, onTap: (i) => setState(() => _currentIndex = i)),
+            Expanded(child: _NavItem(icon: Icons.history_outlined, label: 'Historie', index: 2, current: _currentIndex, onTap: (i) => setState(() => _currentIndex = i))),
+            Expanded(child: _NavItem(icon: Icons.settings_outlined, label: 'Einst.', index: 3, current: _currentIndex, onTap: (i) => setState(() => _currentIndex = i))),
           ],
         ),
       ),

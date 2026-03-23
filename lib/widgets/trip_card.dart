@@ -89,25 +89,29 @@ class TripCard extends StatelessWidget {
             const Divider(height: 20),
             Row(
               children: [
-                if (isBusiness) ...[
-                  _ToggleChip(
-                    label: 'Abgerechnet',
-                    active: trip.isBilled,
-                    onTap: () => onToggle('isBilled', !trip.isBilled),
-                  ),
-                  const SizedBox(width: 8),
-                  _ToggleChip(
-                    label: 'Eingetragen',
-                    active: trip.isLogged,
-                    onTap: () => onToggle('isLogged', !trip.isLogged),
-                  ),
-                ],
-                const Spacer(),
+                if (isBusiness)
+                  Expanded(
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      _ToggleChip(
+                        label: 'Abgerechnet',
+                        active: trip.isBilled,
+                        onTap: () => onToggle('isBilled', !trip.isBilled),
+                      ),
+                      const SizedBox(width: 8),
+                      _ToggleChip(
+                        label: 'Eingetragen',
+                        active: trip.isLogged,
+                        onTap: () => onToggle('isLogged', !trip.isLogged),
+                      ),
+                    ]),
+                  )
+                else
+                  const Spacer(),
                 if (onRestore != null)
-                  IconButton(onPressed: onRestore, icon: const Icon(Icons.restore, size: 18), tooltip: 'Wiederherstellen', constraints: const BoxConstraints(minWidth: 36, minHeight: 36)),
-                IconButton(onPressed: onReturnTrip, icon: const Icon(Icons.sync_alt, size: 18), tooltip: 'Rückfahrt erstellen', constraints: const BoxConstraints(minWidth: 36, minHeight: 36)),
-                IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_outlined, size: 18), tooltip: 'Bearbeiten', constraints: const BoxConstraints(minWidth: 36, minHeight: 36)),
-                IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red), tooltip: 'Löschen', constraints: const BoxConstraints(minWidth: 36, minHeight: 36)),
+                  IconButton(onPressed: onRestore, icon: const Icon(Icons.restore, size: 18), tooltip: 'Wiederherstellen', constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+                IconButton(onPressed: onReturnTrip, icon: const Icon(Icons.sync_alt, size: 18), tooltip: 'Rückfahrt erstellen', constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+                IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_outlined, size: 18), tooltip: 'Bearbeiten', constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+                IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red), tooltip: 'Löschen', constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
               ],
             ),
           ],

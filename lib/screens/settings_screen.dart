@@ -366,8 +366,8 @@ class _SectionCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const Spacer(),
+            Flexible(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 8),
             ?trailing,
           ]),
           const SizedBox(height: 12),

@@ -97,7 +97,8 @@ List<Trip> _parseSemanticSegments(List<dynamic> segments) {
   final trips = <Trip>[];
   final vehicleTypes = {'IN_PASSENGER_VEHICLE', 'IN_CAR', 'MOTORCYCLING', 'IN_VEHICLE'};
 
-  for (final seg in segments) {
+  for (int i = 0; i < segments.length; i++) {
+    final seg = segments[i];
     if (seg is! Map<String, dynamic>) continue;
     final activity = seg['activity'] as Map<String, dynamic>?;
     if (activity == null) continue;
@@ -117,13 +118,38 @@ List<Trip> _parseSemanticSegments(List<dynamic> segments) {
 
     final distanceM = (activity['distanceMeters'] as num?)?.toDouble() ?? 0.0;
 
-    // Endpunkt als Ziel
+    // Ziel aus nachfolgendem visit-Segment ermitteln
     String destName = '';
-    const String destAddress = '';
-    final endLatLng = activity['end']?['latLng'] as String?;
-    // latLng format: "51.1234567, 13.1234567"
-    if (endLatLng != null) {
-      destName = _latLngToLabel(endLatLng);
+    String destAddress = '';
+    if (i + 1 < segments.length) {
+      final nextSeg = segments[i + 1];
+      if (nextSeg is Map<String, dynamic>) {
+        final visit = nextSeg['visit'] as Map<String, dynamic>?;
+        if (visit != null) {
+          final topC = visit['topCandidate'] as Map<String, dynamic>?;
+          final semanticType = topC?['semanticType'] as String? ?? '';
+          switch (semanticType) {
+            case 'TYPE_HOME':
+              destName = 'Zuhause';
+            case 'TYPE_WORK':
+              destName = 'Arbeit';
+            default:
+              break;
+          }
+          // Koordinaten aus visit-Segment als Adresse
+          if (destName.isEmpty) {
+            final placeLocation = topC?['placeLocation'] as Map<String, dynamic>?;
+            final latLng = placeLocation?['latLng'] as String?;
+            if (latLng != null) destAddress = _latLngToLabel(latLng);
+          }
+        }
+      }
+    }
+
+    // Fallback: Koordinaten aus activity.end
+    if (destName.isEmpty && destAddress.isEmpty) {
+      final endLatLng = activity['end']?['latLng'] as String?;
+      if (endLatLng != null) destAddress = _latLngToLabel(endLatLng);
     }
 
     trips.add(Trip(
