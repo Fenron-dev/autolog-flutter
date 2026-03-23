@@ -6,6 +6,7 @@ import '../providers/providers.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../utils/export_utils.dart';
+import '../utils/backup_utils.dart';
 import '../widgets/vehicle_form.dart';
 import 'archive_screen.dart';
 import 'accidents_screen.dart';
@@ -234,25 +235,84 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          // Export & Import
+          // Export
           _SectionCard(
-            title: 'Daten & Export',
+            title: 'Export',
+            child: Row(children: [
+              Expanded(child: _ExportButton(icon: Icons.table_chart_outlined, label: 'CSV', onTap: () => exportToCsv(context, allTrips))),
+              const SizedBox(width: 8),
+              Expanded(child: _ExportButton(icon: Icons.picture_as_pdf_outlined, label: 'PDF', onTap: () => exportToPdf(context, allTrips))),
+            ]),
+          ),
+          const SizedBox(height: 12),
+
+          // Backup
+          _SectionCard(
+            title: 'Backup',
             child: Column(children: [
+              Text(
+                'Sichert alle Fahrten, Fahrzeuge, Ziele und Unfallberichte als JSON-Datei.',
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: _ExportButton(icon: Icons.table_chart_outlined, label: 'CSV', onTap: () => exportToCsv(context, allTrips))),
+                Expanded(child: _ExportButton(
+                  icon: Icons.backup_outlined,
+                  label: 'Backup erstellen',
+                  onTap: () => createBackup(context, ref),
+                )),
                 const SizedBox(width: 8),
-                Expanded(child: _ExportButton(icon: Icons.picture_as_pdf_outlined, label: 'PDF', onTap: () => exportToPdf(context, allTrips))),
+                Expanded(child: _ExportButton(
+                  icon: Icons.restore_outlined,
+                  label: 'Wiederherstellen',
+                  onTap: () => restoreBackup(context, ref),
+                )),
               ]),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: _ExportButton(
-                  icon: Icons.upload_file_outlined,
-                  label: 'JSON importieren',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen())),
+            ]),
+          ),
+          const SizedBox(height: 12),
+
+          // Google Maps Import
+          _SectionCard(
+            title: 'Google Maps Import',
+            trailing: IconButton(
+              icon: const Icon(Icons.help_outline, size: 20),
+              tooltip: 'Anleitung',
+              onPressed: () => showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Google Maps Daten importieren'),
+                  content: const SingleChildScrollView(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('So exportierst du deine Daten aus Google Maps:', style: TextStyle(fontWeight: FontWeight.w600)),
+                      SizedBox(height: 8),
+                      Text('1. Öffne takeout.google.com in einem Browser'),
+                      SizedBox(height: 4),
+                      Text('2. Klicke auf „Auswahl aufheben" und wähle dann nur „Maps (deine Orte)"'),
+                      SizedBox(height: 4),
+                      Text('3. Exportformat: JSON, Häufigkeit: Einmal'),
+                      SizedBox(height: 4),
+                      Text('4. Export erstellen und herunterladen'),
+                      SizedBox(height: 4),
+                      Text('5. ZIP entpacken → Ordner „Maps" → Datei „Records.json"'),
+                      SizedBox(height: 4),
+                      Text('6. Diese Datei hier importieren'),
+                      SizedBox(height: 12),
+                      Text('Hinweis: Google ändert das Export-Format regelmäßig. Nicht alle Einträge können erkannt werden.', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                    ]),
+                  ),
+                  actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
                 ),
               ),
-            ]),
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: _ExportButton(
+                icon: Icons.upload_file_outlined,
+                label: 'Records.json importieren',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportScreen())),
+              ),
+            ),
           ),
           const SizedBox(height: 80),
         ],

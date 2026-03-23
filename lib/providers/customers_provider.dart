@@ -54,6 +54,11 @@ class CustomersNotifier extends StateNotifier<List<Customer>> {
     state = [...state, Customer(id: _uuid.v4(), name: name, address: address)];
     _save();
   }
+
+  void loadCustomers(List<Customer> customers) {
+    state = customers;
+    _save();
+  }
 }
 
 final customersProvider = StateNotifierProvider<CustomersNotifier, List<Customer>>(

@@ -9,7 +9,7 @@ class ImportScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Daten importieren')),
+      appBar: AppBar(title: const Text('Google Maps Import')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -18,12 +18,12 @@ class ImportScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Row(children: [
-                  Icon(Icons.info_outline, color: Colors.blue),
+                  Icon(Icons.map_outlined, color: Colors.blue),
                   SizedBox(width: 8),
-                  Text('AutoLog JSON-Import', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                  Text('Google Maps Standortverlauf', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
                 ]),
                 const SizedBox(height: 12),
-                const Text('Du kannst dein Fahrtenbuch aus einer AutoLog JSON-Backup-Datei wiederherstellen.'),
+                const Text('Importiere deine Standortdaten aus Google Takeout (Records.json). Fahrten werden automatisch aus dem Standortverlauf erkannt.'),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () async {

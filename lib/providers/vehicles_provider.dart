@@ -91,6 +91,11 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
     state = state.map((v) => v.copyWith(isDefault: v.id == id)).toList();
     _save();
   }
+
+  void loadVehicles(List<Vehicle> vehicles) {
+    state = vehicles.isEmpty ? [_defaultVehicle] : vehicles;
+    _save();
+  }
 }
 
 final vehiclesProvider = StateNotifierProvider<VehiclesNotifier, List<Vehicle>>(

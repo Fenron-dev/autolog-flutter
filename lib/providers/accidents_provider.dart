@@ -58,6 +58,11 @@ class AccidentsNotifier extends StateNotifier<List<AccidentReport>> {
     state = state.where((a) => a.id != id).toList();
     _save();
   }
+
+  void loadAccidents(List<AccidentReport> accidents) {
+    state = accidents;
+    _save();
+  }
 }
 
 final accidentsProvider = StateNotifierProvider<AccidentsNotifier, List<AccidentReport>>(
