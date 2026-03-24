@@ -16,7 +16,22 @@ class PlannedScreen extends ConsumerWidget {
           ..sort((a, b) => a.date.compareTo(b.date))));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Geplante Fahrten', style: TextStyle(fontWeight: FontWeight.w600))),
+      appBar: AppBar(
+        title: Row(children: [
+          const Text('Geplante Fahrten', style: TextStyle(fontWeight: FontWeight.w600)),
+          if (planned.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text('${planned.length}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onPrimaryContainer)),
+            ),
+          ],
+        ]),
+      ),
       body: planned.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.calendar_today_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),

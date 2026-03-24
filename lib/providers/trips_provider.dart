@@ -75,7 +75,9 @@ class TripsNotifier extends StateNotifier<TripsState> {
   List<Trip> get _all => [...state.activeTrips, ...state.deletedTrips, ...state.archivedTrips];
 
   void addTrip(Trip trip) {
-    final trips = [..._all, trip];
+    // Always ensure a unique ID – trips with empty ID caused duplicate/ghost entries
+    final withId = trip.id.isEmpty ? trip.copyWith(id: _uuid.v4()) : trip;
+    final trips = [..._all, withId];
     state = _compute(trips);
     _save(trips);
   }
@@ -180,6 +182,13 @@ class TripsNotifier extends StateNotifier<TripsState> {
   }
 
   void loadTrips(List<Trip> trips) {
+    state = _compute(trips);
+    _save(trips);
+  }
+
+  /// Replace a single trip in-place (used by geocoding to update address).
+  void replaceTripInPlace(Trip updated) {
+    final trips = _all.map((t) => t.id == updated.id ? updated : t).toList();
     state = _compute(trips);
     _save(trips);
   }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../services/geocoding_service.dart';
 import '../utils/date_utils.dart' as du;
 import '../theme/app_theme.dart';
 
@@ -30,6 +32,8 @@ class _TripFormState extends ConsumerState<TripForm> {
   late String _notes;
   late String? _vehicleId;
   bool _saveAsCustomer = false;
+  bool _isGeocoding = false;
+  final _addressController = TextEditingController();
 
   @override
   void initState() {
@@ -47,6 +51,7 @@ class _TripFormState extends ConsumerState<TripForm> {
     _isLogged = d?.isLogged ?? false;
     _notes = d?.notes ?? '';
     _vehicleId = d?.vehicleId;
+    _addressController.text = _destinationAddress;
     if (_vehicleId == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -83,14 +88,69 @@ class _TripFormState extends ConsumerState<TripForm> {
     }
   }
 
+  Future<void> _geocodeCurrentLocation() async {
+    setState(() => _isGeocoding = true);
+    try {
+      final perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      final address = await GeocodingService.instance.getAddress(
+        pos.latitude,
+        pos.longitude,
+      );
+      if (!mounted) return;
+      if (address != null && address.isNotEmpty) {
+        setState(() {
+          _destinationAddress = address;
+          _addressController.text = address;
+        });
+        // Try to match against customers
+        final customers = ref.read(customersProvider);
+        final match = GeocodingService.instance.matchCustomer(address, customers);
+        if (match != null) {
+          setState(() {
+            _destinationName = match.name;
+            _saveAsCustomer = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Kunde erkannt: ${match.name}')),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Adresse konnte nicht ermittelt werden.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('GPS-Zugriff fehlgeschlagen.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeocoding = false);
+    }
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
-    // Validierung: endTime > startTime (Bug-Fix)
+    // Validierung: endTime >= startTime (gleiche Minute ist erlaubt)
     if (_status == TripStatus.completed && _startTime.isNotEmpty && _endTime.isNotEmpty) {
-      if (_endTime.compareTo(_startTime) <= 0) {
+      if (_endTime.compareTo(_startTime) < 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Endzeit muss nach Startzeit liegen.')),
+          const SnackBar(content: Text('Endzeit darf nicht vor der Startzeit liegen.')),
         );
         return;
       }
@@ -234,10 +294,28 @@ class _TripFormState extends ConsumerState<TripForm> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      initialValue: _destinationAddress,
-                      decoration: const InputDecoration(labelText: 'Adresse (optional)'),
-                      onChanged: (v) => _destinationAddress = v,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _addressController,
+                            decoration: const InputDecoration(labelText: 'Adresse (optional)'),
+                            onChanged: (v) => _destinationAddress = v,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: _isGeocoding ? null : _geocodeCurrentLocation,
+                          icon: _isGeocoding
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.my_location, size: 20),
+                          tooltip: 'Aktuelle Adresse ermitteln',
+                          style: IconButton.styleFrom(
+                            foregroundColor: AppTheme.emerald,
+                          ),
+                        ),
+                      ],
                     ),
                     if (_destinationName.isNotEmpty && !customers.any((c) => c.name.toLowerCase() == _destinationName.toLowerCase()))
                       CheckboxListTile(
