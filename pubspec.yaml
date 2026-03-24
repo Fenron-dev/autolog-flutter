@@ -46,6 +46,9 @@ dependencies:
   # Local notifications
   flutter_local_notifications: ^17.2.4
 
+  # Reverse geocoding (coordinates → address)
+  geocoding: ^3.0.0
+
   # Auto-detection (GPS + Bluetooth)
   geolocator: ^13.0.0
   flutter_blue_plus: ^1.35.5

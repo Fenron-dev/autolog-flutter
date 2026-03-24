@@ -10,6 +10,7 @@ import 'settings_screen.dart';
 import '../widgets/trip_form.dart';
 import '../models/models.dart';
 import '../services/auto_detect_service.dart';
+import '../services/geocoding_service.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
@@ -55,7 +56,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       setState(() {
         _isRecording = true;
         _isPaused = false;
-        _recordingSource = event.source == 'gps' ? 'GPS' : 'Bluetooth';
+        _recordingSource = _sourceLabel(event.source);
         _recordingSince = DateTime.now();
       });
       if (!event.autoRecord) {
@@ -72,17 +73,29 @@ class _MainShellState extends ConsumerState<MainShell> {
         _isPaused = false;
       });
       if (start != null) {
-        _saveTripAndNotify(start, event);
+        _saveTripWithGeocoding(start, event);
       }
     }
+  }
+
+  static String _sourceLabel(String source) => switch (source) {
+        'gps' => 'GPS',
+        'bluetooth' => 'Bluetooth',
+        'manual' => 'Manuell',
+        _ => source,
+      };
+
+  // ── Manual start/stop ─────────────────────────────────────────────────
+
+  Future<void> _startManualRecording() async {
+    await AutoDetectService.instance.startManualTrip();
   }
 
   // ── Trip Start dialog (autoRecord = false) ─────────────────────────────
 
   void _showTripDetectedDialog(TripStartDetected event) {
     if (!mounted) return;
-    final source =
-        event.source == 'gps' ? 'GPS-Geschwindigkeit' : 'Bluetooth-Verbindung';
+    final source = _sourceLabel(event.source);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -95,7 +108,6 @@ class _MainShellState extends ConsumerState<MainShell> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // User doesn't want this trip → clear pending, stop recording indicator
               _pendingTripStart = null;
               setState(() {
                 _isRecording = false;
@@ -107,7 +119,6 @@ class _MainShellState extends ConsumerState<MainShell> {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // _pendingTripStart stays set → trip will auto-save when it ends
             },
             child: const Text('Aufzeichnen'),
           ),
@@ -120,7 +131,7 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   void _showTripPauseDialog(TripPauseDetected event) {
     if (!mounted) return;
-    final source = event.source == 'gps' ? 'GPS' : 'Bluetooth';
+    final source = _sourceLabel(event.source);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -152,43 +163,78 @@ class _MainShellState extends ConsumerState<MainShell> {
     );
   }
 
-  // ── Save trip ──────────────────────────────────────────────────────────
+  // ── Save trip with reverse geocoding + customer matching ──────────────
 
-  void _saveTripAndNotify(TripStartDetected start, TripEndDetected end) {
+  Future<void> _saveTripWithGeocoding(
+    TripStartDetected start,
+    TripEndDetected end,
+  ) async {
+    final source = _sourceLabel(start.source);
+    String destinationName = 'Erkannte Fahrt ($source)';
+    String destinationAddress = '';
+    String startAddress = '';
+
+    // Reverse-geocode end position (destination)
+    if (end.endLat != null && end.endLng != null) {
+      final addr =
+          await GeocodingService.instance.getAddress(end.endLat!, end.endLng!);
+      if (addr != null) destinationAddress = addr;
+    }
+
+    // Reverse-geocode start position
+    if (start.startLat != null && start.startLng != null) {
+      final addr = await GeocodingService.instance
+          .getAddress(start.startLat!, start.startLng!);
+      if (addr != null) startAddress = addr;
+    }
+
+    // Try to match destination address against customer list
+    if (destinationAddress.isNotEmpty) {
+      final customers = ref.read(customersProvider);
+      final match =
+          GeocodingService.instance.matchCustomer(destinationAddress, customers);
+      if (match != null) {
+        destinationName = match.name;
+        // Keep the geocoded address as fallback if customer has no address
+        if (match.address.isNotEmpty) destinationAddress = match.address;
+      }
+    }
+
+    final notes = StringBuffer('Automatisch erfasst via $source');
+    if (startAddress.isNotEmpty) notes.write('\nStart: $startAddress');
+
     final notifier = ref.read(tripsProvider.notifier);
-    final source = start.source == 'gps' ? 'GPS' : 'Bluetooth';
     final trip = Trip(
       id: '',
       date: start.startDate,
       startTime: start.startTime,
       endTime: end.endTime,
-      destinationName: 'Erkannte Fahrt ($source)',
-      destinationAddress: '',
+      destinationName: destinationName,
+      destinationAddress: destinationAddress,
       distanceKm: end.distanceKm > 0 ? end.distanceKm : 0,
       type: TripType.business,
       status: TripStatus.completed,
       isBilled: false,
       isLogged: false,
-      notes: 'Automatisch erfasst via $source',
+      notes: notes.toString(),
       vehicleId: null,
     );
     notifier.addTrip(trip);
 
     if (mounted) {
+      final addrInfo =
+          destinationAddress.isNotEmpty ? '\n$destinationAddress' : '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Fahrt gespeichert: ${end.distanceKm.toStringAsFixed(1)} km '
-            '(${start.startTime} – ${end.endTime})',
+            '(${start.startTime} – ${end.endTime})'
+            '$addrInfo',
           ),
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 6),
           action: SnackBarAction(
             label: 'Bearbeiten',
-            onPressed: () {
-              // Open the trip form pre-filled with the saved trip data
-              // so the user can adjust destination, type, etc.
-              _showTripForm(trip: trip);
-            },
+            onPressed: () => _showTripForm(trip: trip),
           ),
         ),
       );
@@ -244,7 +290,7 @@ class _MainShellState extends ConsumerState<MainShell> {
                 child: Text(
                   _isPaused
                       ? 'Fahrt pausiert – warte auf Antwort…'
-                      : 'Fahrt wird aufgezeichnet via $_recordingSource'
+                      : 'Aufzeichnung via $_recordingSource'
                           '${minutes > 0 ? ' ($minutes Min.)' : ''}',
                   style: const TextStyle(
                     color: Colors.white,
@@ -255,16 +301,16 @@ class _MainShellState extends ConsumerState<MainShell> {
               ),
               if (!_isPaused)
                 TextButton(
-                  onPressed: () {
-                    AutoDetectService.instance.confirmEndTrip();
-                  },
+                  onPressed: () =>
+                      AutoDetectService.instance.confirmEndTrip(),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: const Text('Beenden', style: TextStyle(fontSize: 13)),
+                  child:
+                      const Text('Beenden', style: TextStyle(fontSize: 13)),
                 ),
             ],
           ),
@@ -310,12 +356,14 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showTripForm(),
-        backgroundColor: AppTheme.emerald,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.add, size: 28),
-      ),
+      floatingActionButton: _isRecording
+          ? null // Hide FAB during recording – banner has "Beenden"
+          : FloatingActionButton(
+              onPressed: () => _showFabMenu(),
+              backgroundColor: AppTheme.emerald,
+              foregroundColor: Colors.white,
+              child: const Icon(Icons.add, size: 28),
+            ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
         color: Theme.of(context).colorScheme.surface,
@@ -365,6 +413,46 @@ class _MainShellState extends ConsumerState<MainShell> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ── FAB menu (new trip OR manual recording) ────────────────────────────
+
+  void _showFabMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_note, color: AppTheme.emerald),
+                title: const Text('Fahrt manuell eintragen'),
+                subtitle: const Text('Formular zum Ausfüllen öffnen'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showTripForm();
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading:
+                    const Icon(Icons.play_circle_fill, color: AppTheme.emerald),
+                title: const Text('Aufzeichnung starten'),
+                subtitle: const Text(
+                  'GPS-Tracking starten und Fahrt aufzeichnen',
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _startManualRecording();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

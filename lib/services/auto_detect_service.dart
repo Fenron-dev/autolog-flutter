@@ -10,15 +10,19 @@ import 'notification_service.dart';
 sealed class AutoDetectEvent {}
 
 class TripStartDetected extends AutoDetectEvent {
-  final String source; // 'gps' | 'bluetooth'
+  final String source; // 'gps' | 'bluetooth' | 'manual'
   final String startDate; // ISO yyyy-MM-dd
   final String startTime; // HH:mm
   final bool autoRecord;
+  final double? startLat;
+  final double? startLng;
   TripStartDetected({
     required this.source,
     required this.startDate,
     required this.startTime,
     required this.autoRecord,
+    this.startLat,
+    this.startLng,
   });
 }
 
@@ -33,10 +37,14 @@ class TripEndDetected extends AutoDetectEvent {
   final String source;
   final String endTime; // HH:mm
   final double distanceKm;
+  final double? endLat;
+  final double? endLng;
   TripEndDetected({
     required this.source,
     required this.endTime,
     required this.distanceKm,
+    this.endLat,
+    this.endLng,
   });
 }
 
@@ -59,14 +67,20 @@ class AutoDetectService {
 
   bool _inTrip = false;
   bool _isPaused = false; // waiting for user decision (pause vs end)
-  String? _tripSource; // which source started the trip: 'gps' | 'bluetooth'
+  String? _tripSource; // 'gps' | 'bluetooth' | 'manual'
   DateTime? _movingSince;
   DateTime? _belowThresholdSince;
   DateTime? _tripStartedAt;
   double _accumulatedDistanceM = 0;
   Position? _lastPosition;
+  Position? _startPosition; // GPS position at trip start
 
   String _btTargetAddress = '';
+
+  /// Whether a trip is currently in progress (for UI state).
+  bool get inTrip => _inTrip;
+  bool get isPaused => _isPaused;
+  String? get tripSource => _tripSource;
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -127,6 +141,80 @@ class AutoDetectService {
     _autoEndTimer?.cancel();
     _autoEndTimer = null;
     _endTrip(_tripSource ?? 'gps');
+  }
+
+  /// Start a trip manually (user pressed "Aufzeichnung starten" button).
+  Future<void> startManualTrip() async {
+    if (_inTrip) return;
+
+    // Try to get current position for start coordinates
+    Position? pos;
+    try {
+      final perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.whileInUse ||
+          perm == LocationPermission.always) {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (_) {}
+
+    _inTrip = true;
+    _isPaused = false;
+    _tripSource = 'manual';
+    _tripStartedAt = DateTime.now();
+    _accumulatedDistanceM = 0;
+    _startPosition = pos;
+    _lastPosition = pos;
+
+    _events.add(TripStartDetected(
+      source: 'manual',
+      startDate: du.todayIso(),
+      startTime: _formatTime(_tripStartedAt!),
+      autoRecord: true,
+      startLat: pos?.latitude,
+      startLng: pos?.longitude,
+    ));
+    NotificationService.instance.showTripStarted('manual');
+
+    // If GPS speed detection is not already running, start a lightweight
+    // position stream so we can track distance for manual trips too.
+    if (_gpsSub == null) {
+      _startManualGpsTracking();
+    }
+  }
+
+  void _startManualGpsTracking() async {
+    try {
+      final androidSettings = AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10, // for manual, 10m is fine (saves battery)
+        intervalDuration: const Duration(seconds: 5),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationText: 'AutoLog zeichnet Fahrt auf',
+          notificationTitle: 'AutoLog – Manuelle Aufzeichnung',
+          enableWakeLock: true,
+          notificationIcon:
+              AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+        ),
+      );
+      _gpsSub = Geolocator.getPositionStream(
+        locationSettings: androidSettings,
+      ).listen((pos) {
+        if (_lastPosition != null && _inTrip) {
+          _accumulatedDistanceM += Geolocator.distanceBetween(
+            _lastPosition!.latitude,
+            _lastPosition!.longitude,
+            pos.latitude,
+            pos.longitude,
+          );
+        }
+        _lastPosition = pos;
+      }, onError: (_) {});
+    } catch (_) {}
   }
 
   void dispose() {
@@ -248,12 +336,15 @@ class AutoDetectService {
     _tripSource = 'gps';
     _tripStartedAt = _movingSince ?? DateTime.now();
     _accumulatedDistanceM = 0;
+    _startPosition = _lastPosition;
 
     final event = TripStartDetected(
       source: 'gps',
       startDate: du.todayIso(),
       startTime: _formatTime(_tripStartedAt!),
       autoRecord: settings.speedAutoRecord,
+      startLat: _startPosition?.latitude,
+      startLng: _startPosition?.longitude,
     );
     _events.add(event);
     NotificationService.instance.showTripStarted('gps');
@@ -356,12 +447,15 @@ class AutoDetectService {
     _tripSource = 'bluetooth';
     _tripStartedAt = DateTime.now();
     _accumulatedDistanceM = 0;
+    _startPosition = _lastPosition; // may be null if GPS not active
 
     final event = TripStartDetected(
       source: 'bluetooth',
       startDate: du.todayIso(),
       startTime: _formatTime(_tripStartedAt!),
       autoRecord: settings.bluetoothAutoRecord,
+      startLat: _startPosition?.latitude,
+      startLng: _startPosition?.longitude,
     );
     _events.add(event);
     NotificationService.instance.showTripStarted('bluetooth');
@@ -395,6 +489,8 @@ class AutoDetectService {
       source: source,
       endTime: _formatTime(DateTime.now()),
       distanceKm: distanceKm,
+      endLat: _lastPosition?.latitude,
+      endLng: _lastPosition?.longitude,
     ));
     NotificationService.instance.showTripEnded(distanceKm);
     _reset();
@@ -411,6 +507,7 @@ class AutoDetectService {
     _tripStartedAt = null;
     _accumulatedDistanceM = 0;
     _lastPosition = null;
+    _startPosition = null;
     _gpsStopTimer?.cancel();
     _gpsStopTimer = null;
     _autoEndTimer?.cancel();
