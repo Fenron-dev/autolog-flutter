@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/main_shell.dart';
 import 'providers/providers.dart';
 import 'theme/app_theme.dart';
+import 'services/notification_service.dart';
 
 const _secureStorage = FlutterSecureStorage(
   aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -27,6 +28,7 @@ void main() async {
   await Hive.initFlutter();
   final cipher = await _getOrCreateCipher();
   await Hive.openBox('autolog', encryptionCipher: cipher);
+  await NotificationService.instance.init();
   runApp(const ProviderScope(child: AutoLogApp()));
 }
 

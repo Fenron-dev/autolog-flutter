@@ -46,6 +46,8 @@ class _MainShellState extends ConsumerState<MainShell> {
       if (!event.autoRecord) {
         _showTripDetectedDialog(event);
       }
+    } else if (event is TripPauseDetected) {
+      _showTripPauseDialog(event);
     } else if (event is TripEndDetected) {
       final start = _pendingTripStart;
       _pendingTripStart = null;
@@ -53,6 +55,39 @@ class _MainShellState extends ConsumerState<MainShell> {
         _autoSaveTrip(start, event);
       }
     }
+  }
+
+  void _showTripPauseDialog(TripPauseDetected event) {
+    if (!mounted) return;
+    final source = event.source == 'gps' ? 'GPS' : 'Bluetooth';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Fahrt unterbrochen?'),
+        content: Text(
+          'Die $source-Erkennung hat festgestellt, dass du seit 2 Minuten stehst.\n\n'
+          'Bist du an einer Ampel, Bahnschranke oder im Stau? '
+          'Oder ist die Fahrt beendet?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              AutoDetectService.instance.resumeTrip();
+            },
+            child: const Text('Weiterfahrt / Pause'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              AutoDetectService.instance.confirmEndTrip();
+            },
+            child: const Text('Fahrt beenden'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showTripDetectedDialog(TripStartDetected event) {
