@@ -9,7 +9,7 @@ const _uuid = Uuid();
 /// Stores accident photos as files instead of base64 blobs in Hive.
 /// Photo references in AccidentReport.photos can be:
 ///   - "data:image/jpeg;base64,..." (legacy inline base64)
-///   - "file:<uuid>.jpg" (new file-based storage)
+///   - "file:{uuid}.jpg" (new file-based storage)
 class PhotoStorage {
   PhotoStorage._();
   static final instance = PhotoStorage._();
@@ -26,7 +26,7 @@ class PhotoStorage {
     return _photosDir!;
   }
 
-  /// Save raw bytes to a file, return the "file:<name>" reference.
+  /// Save raw bytes to a file, return the "file:{name}" reference.
   Future<String> savePhoto(Uint8List bytes) async {
     final dir = await _getDir();
     final name = '${_uuid.v4()}.jpg';
