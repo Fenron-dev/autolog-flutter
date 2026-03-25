@@ -1,9 +1,21 @@
-import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../models/models.dart';
 import '../utils/date_utils.dart' as du;
+import '../utils/photo_storage.dart';
+
+/// Top-level function for isolate-based photo compression.
+Future<Uint8List> _compressPhoto(Uint8List bytes) async {
+  return FlutterImageCompress.compressWithList(
+    bytes,
+    quality: 60,
+    minWidth: 1024,
+    minHeight: 1024,
+  );
+}
 
 class AccidentForm extends StatefulWidget {
   final AccidentReport? initialData;
@@ -89,12 +101,13 @@ class _AccidentFormState extends State<AccidentForm> {
       final xFile = await picker.pickImage(source: source, maxWidth: 1024, maxHeight: 1024, imageQuality: 60);
       if (xFile != null) {
         final bytes = await xFile.readAsBytes();
-        // Compress if needed
-        final compressed = bytes.length > 200 * 1024
-            ? await FlutterImageCompress.compressWithList(bytes, quality: 60, minWidth: 1024, minHeight: 1024)
+        // Compress in isolate to avoid UI jank
+        final Uint8List compressed = bytes.length > 200 * 1024
+            ? await compute(_compressPhoto, bytes)
             : bytes;
-        final b64 = base64Encode(compressed);
-        setState(() => _photos = [..._photos, 'data:image/jpeg;base64,$b64']);
+        // Save as file instead of base64 blob (saves ~33% storage)
+        final ref = await PhotoStorage.instance.savePhoto(compressed);
+        setState(() => _photos = [..._photos, ref]);
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Foto konnte nicht geladen werden: $e')));
@@ -223,12 +236,7 @@ class _AccidentFormState extends State<AccidentForm> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.memory(
-                                base64Decode(_photos[i].replaceFirst(RegExp(r'data:image/[^;]+;base64,'), '')),
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                              ),
+                              child: _PhotoThumbnail(photoRef: _photos[i]),
                             ),
                             Positioned(
                               top: 4, right: 4,
@@ -263,6 +271,33 @@ class _AccidentFormState extends State<AccidentForm> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Displays a photo thumbnail from either a file reference or legacy base64.
+class _PhotoThumbnail extends StatelessWidget {
+  final String photoRef;
+  const _PhotoThumbnail({required this.photoRef});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: PhotoStorage.instance.loadPhoto(photoRef),
+      builder: (ctx, snap) {
+        if (snap.hasData && snap.data != null) {
+          return Image.memory(
+            snap.data!,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+          );
+        }
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: const Center(child: Icon(Icons.photo_outlined, size: 24)),
+        );
+      },
     );
   }
 }

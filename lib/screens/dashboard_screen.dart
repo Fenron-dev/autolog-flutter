@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
-import '../utils/date_utils.dart' as du;
 import '../widgets/trip_card.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -14,15 +13,15 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activeTrips = ref.watch(tripsProvider.select((s) => s.activeTrips));
+    final stats = ref.watch(dashboardStatsProvider);
     final vehicles = ref.watch(vehiclesProvider);
     final vehicleMap = {for (final v in vehicles) v.id: v};
 
-    final completed = activeTrips.where((t) => t.status == TripStatus.completed).toList();
-    final business = completed.where((t) => t.type == TripType.business).toList();
-    final unbilled = business.where((t) => !t.isBilled).toList();
-    final unlogged = business.where((t) => !t.isLogged).toList();
-    final unbilledKm = unbilled.fold(0.0, (s, t) => s + t.distanceKm);
+    final completed = stats.completed;
+    final unbilled = stats.unbilled;
+    final unlogged = stats.unlogged;
+    final unbilledKm = stats.unbilledKm;
+    final todayTrips = stats.todayTrips;
 
     final defaultVehicle = vehicles.firstWhere((v) => v.isDefault, orElse: () => vehicles.isNotEmpty ? vehicles.first : const Vehicle(id: '', name: ''));
     double currentMileage = 0;
@@ -34,12 +33,6 @@ class DashboardScreen extends ConsumerWidget {
       });
       currentMileage = defaultVehicle.initialMileage + validTrips.fold(0.0, (s, t) => s + t.distanceKm);
     }
-
-    final now = DateTime.now();
-    final todayTrips = completed.where((t) {
-      final d = DateTime.tryParse(t.date);
-      return d != null && du.isSameDay(d, now);
-    }).toList()..sort((a, b) => b.startTime.compareTo(a.startTime));
 
     return Scaffold(
       appBar: AppBar(

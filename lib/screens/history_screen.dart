@@ -24,6 +24,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final _scrollController = ScrollController();
   bool _showScrollButtons = false;
 
+  // Cached filter results – invalidated when trips or filter change
+  List<Trip>? _cachedTrips;
+  int _cachedTotalCompleted = 0;
+  double _cachedTotalKm = 0;
+  Object? _lastTripsIdentity;
+  TimeFilter? _lastFilter;
+
   @override
   void initState() {
     super.initState();
@@ -40,30 +47,41 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     super.dispose();
   }
 
-  List<Trip> _filterTrips(List<Trip> trips) {
-    final completed = trips.where((t) => t.status == TripStatus.completed).toList();
-    if (_filter == TimeFilter.all) {
-      return completed
-        ..sort((a, b) {
-          final dc = b.date.compareTo(a.date);
-          return dc != 0 ? dc : b.startTime.compareTo(a.startTime);
-        });
+  /// Returns filtered+sorted trips, using cache when possible.
+  ({List<Trip> trips, int totalCompleted, double totalKm}) _getFilteredTrips(List<Trip> activeTrips) {
+    // Cache hit: same trip list identity and same filter
+    if (identical(activeTrips, _lastTripsIdentity) && _filter == _lastFilter && _cachedTrips != null) {
+      return (trips: _cachedTrips!, totalCompleted: _cachedTotalCompleted, totalKm: _cachedTotalKm);
     }
-    final now = DateTime.now();
-    return completed.where((t) {
-      final d = DateTime.tryParse(t.date);
-      if (d == null) return false;
-      return switch (_filter) {
-        TimeFilter.week => du.isSameWeek(d, now),
-        TimeFilter.month => du.isSameMonth(d, now),
-        TimeFilter.year => du.isSameYear(d, now),
-        TimeFilter.all => true,
-      };
-    }).toList()
-      ..sort((a, b) {
-        final dc = b.date.compareTo(a.date);
-        return dc != 0 ? dc : b.startTime.compareTo(a.startTime);
-      });
+    _lastTripsIdentity = activeTrips;
+    _lastFilter = _filter;
+
+    final completed = activeTrips.where((t) => t.status == TripStatus.completed).toList();
+    _cachedTotalCompleted = completed.length;
+
+    List<Trip> filtered;
+    if (_filter == TimeFilter.all) {
+      filtered = completed;
+    } else {
+      final now = DateTime.now();
+      filtered = completed.where((t) {
+        final d = DateTime.tryParse(t.date);
+        if (d == null) return false;
+        return switch (_filter) {
+          TimeFilter.week => du.isSameWeek(d, now),
+          TimeFilter.month => du.isSameMonth(d, now),
+          TimeFilter.year => du.isSameYear(d, now),
+          TimeFilter.all => true,
+        };
+      }).toList();
+    }
+    filtered.sort((a, b) {
+      final dc = b.date.compareTo(a.date);
+      return dc != 0 ? dc : b.startTime.compareTo(a.startTime);
+    });
+    _cachedTrips = filtered;
+    _cachedTotalKm = filtered.fold(0.0, (s, t) => s + t.distanceKm);
+    return (trips: filtered, totalCompleted: _cachedTotalCompleted, totalKm: _cachedTotalKm);
   }
 
   void _exitSelectMode() {
@@ -150,9 +168,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final activeTrips = ref.watch(tripsProvider.select((s) => s.activeTrips));
     final vehicles = ref.watch(vehiclesProvider);
     final vehicleMap = {for (final v in vehicles) v.id: v};
-    final trips = _filterTrips(activeTrips);
-    final totalCompleted =
-        activeTrips.where((t) => t.status == TripStatus.completed).length;
+    final result = _getFilteredTrips(activeTrips);
+    final trips = result.trips;
+    final totalCompleted = result.totalCompleted;
+    final totalKm = result.totalKm;
 
     return Scaffold(
       appBar: _selectMode
@@ -260,7 +279,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                           ),
                           const Spacer(),
                           Text(
-                            '${trips.fold(0.0, (s, t) => s + t.distanceKm).toStringAsFixed(1)} km',
+                            '${totalKm.toStringAsFixed(1)} km',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,

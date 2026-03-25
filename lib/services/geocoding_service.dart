@@ -86,12 +86,25 @@ class GeocodingService {
     return parts.join(', ');
   }
 
-  /// Count how many comma-separated parts of [a] appear in [b] and vice versa.
+  /// Count how many word-level tokens of [a] appear in [b] and vice versa.
+  /// Uses pre-split sets for O(n) intersection instead of nested loops.
   int _matchScore(String a, String b) {
-    final partsA = a.split(RegExp(r'[,\s]+')).where((s) => s.length > 2).toSet();
-    final partsB = b.split(RegExp(r'[,\s]+')).where((s) => s.length > 2).toSet();
+    final partsA = _tokenize(a);
+    final partsB = _tokenize(b);
     return partsA.intersection(partsB).length;
   }
+
+  /// Cache tokenized address parts to avoid repeated splitting.
+  final _tokenCache = <String, Set<String>>{};
+
+  Set<String> _tokenize(String address) {
+    return _tokenCache.putIfAbsent(address, () =>
+      address.split(RegExp(r'[,\s]+')).where((s) => s.length > 2).toSet(),
+    );
+  }
+
+  /// Clear token cache when customer list changes (call from outside if needed).
+  void clearCache() => _tokenCache.clear();
 
   /// Extract "street number" from an address string (first comma-separated part).
   String _extractStreet(String address) {

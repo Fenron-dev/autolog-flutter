@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
+import '../utils/photo_storage.dart';
 
 const _uuid = Uuid();
 
@@ -32,9 +33,41 @@ class AccidentsNotifier extends StateNotifier<List<AccidentReport>> {
           })
           .whereType<AccidentReport>()
           .toList();
+      // Migrate legacy base64 photos to file storage in background
+      _migratePhotos();
     } catch (_) {
       // FIX: Korrupte Daten crashen die App nicht mehr
       state = [];
+    }
+  }
+
+  /// Migrates inline base64 photo data to file-based storage.
+  Future<void> _migratePhotos() async {
+    bool changed = false;
+    final updated = <AccidentReport>[];
+    for (final report in state) {
+      if (!report.photos.any(PhotoStorage.isBase64)) {
+        updated.add(report);
+        continue;
+      }
+      final newPhotos = <String>[];
+      for (final photo in report.photos) {
+        if (PhotoStorage.isBase64(photo)) {
+          try {
+            newPhotos.add(await PhotoStorage.instance.migrateBase64(photo));
+            changed = true;
+          } catch (_) {
+            newPhotos.add(photo); // Keep original on failure
+          }
+        } else {
+          newPhotos.add(photo);
+        }
+      }
+      updated.add(report.copyWith(photos: newPhotos));
+    }
+    if (changed) {
+      state = updated;
+      _save();
     }
   }
 

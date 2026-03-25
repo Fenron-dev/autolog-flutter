@@ -234,3 +234,48 @@ class TripsNotifier extends StateNotifier<TripsState> {
 final tripsProvider = StateNotifierProvider<TripsNotifier, TripsState>(
   (ref) => TripsNotifier(),
 );
+
+// ── Computed providers (cached, only recalculate when trips change) ─────────
+
+class DashboardStats {
+  final List<Trip> completed;
+  final List<Trip> business;
+  final List<Trip> unbilled;
+  final List<Trip> unlogged;
+  final double unbilledKm;
+  final List<Trip> todayTrips;
+
+  const DashboardStats({
+    this.completed = const [],
+    this.business = const [],
+    this.unbilled = const [],
+    this.unlogged = const [],
+    this.unbilledKm = 0,
+    this.todayTrips = const [],
+  });
+}
+
+final dashboardStatsProvider = Provider<DashboardStats>((ref) {
+  final activeTrips = ref.watch(tripsProvider.select((s) => s.activeTrips));
+  final completed = activeTrips.where((t) => t.status == TripStatus.completed).toList();
+  final business = completed.where((t) => t.type == TripType.business).toList();
+  final unbilled = business.where((t) => !t.isBilled).toList();
+  final unlogged = business.where((t) => !t.isLogged).toList();
+  final unbilledKm = unbilled.fold(0.0, (s, t) => s + t.distanceKm);
+
+  final now = DateTime.now();
+  final todayTrips = completed.where((t) {
+    final d = DateTime.tryParse(t.date);
+    return d != null && d.year == now.year && d.month == now.month && d.day == now.day;
+  }).toList()
+    ..sort((a, b) => b.startTime.compareTo(a.startTime));
+
+  return DashboardStats(
+    completed: completed,
+    business: business,
+    unbilled: unbilled,
+    unlogged: unlogged,
+    unbilledKm: unbilledKm,
+    todayTrips: todayTrips,
+  );
+});
