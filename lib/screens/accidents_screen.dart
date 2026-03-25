@@ -54,7 +54,7 @@ class AccidentsScreen extends ConsumerWidget {
                         Expanded(child: Text(a.location, style: const TextStyle(fontWeight: FontWeight.w500))),
                         GestureDetector(
                           onTap: () async {
-                            final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(a.location)}');
+                            final uri = Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': a.location});
                             if (await canLaunchUrl(uri)) launchUrl(uri, mode: LaunchMode.externalApplication);
                           },
                           child: const Icon(Icons.location_on_outlined, size: 16, color: Colors.blue),

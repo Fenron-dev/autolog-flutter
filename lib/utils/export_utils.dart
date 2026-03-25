@@ -13,10 +13,15 @@ import '../models/models.dart';
 final _dateFormat = DateFormat('dd.MM.yyyy');
 final _fileDateFormat = DateFormat('yyyy-MM-dd');
 
-/// CSV-Injection Schutz: Felder die mit Formel-Zeichen beginnen werden mit ' prefixed
+/// CSV-Injection Schutz: umfassende Sanitierung gegen Spreadsheet-Formeln
 String _sanitizeCsv(String value) {
-  if (value.startsWith(RegExp(r'[=+\-@]'))) return "'$value";
-  return value;
+  // Null-Bytes und Tabs entfernen (können Formeln triggern)
+  var clean = value.replaceAll('\x00', '').replaceAll('\t', ' ');
+  // Länge begrenzen (verhindert Spreadsheet-Bombs)
+  if (clean.length > 1000) clean = '${clean.substring(0, 1000)}…';
+  // Formel-Zeichen am Anfang mit ' prefixen
+  if (clean.startsWith(RegExp(r'[=+\-@\t\r]'))) return "'$clean";
+  return clean;
 }
 
 String _formatDate(String iso) {

@@ -89,6 +89,7 @@ class _TripFormState extends ConsumerState<TripForm> {
   }
 
   Future<void> _geocodeCurrentLocation() async {
+    if (_isGeocoding) return; // Prevent duplicate requests on rapid clicks
     setState(() => _isGeocoding = true);
     try {
       final perm = await Geolocator.checkPermission();

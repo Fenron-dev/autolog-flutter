@@ -84,7 +84,7 @@ class PlannedScreen extends ConsumerWidget {
   }
 
   Future<void> _openMaps(BuildContext context, String address) async {
-    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(address)}');
+    final uri = Uri.https('www.google.com', '/maps/dir/', {'api': '1', 'destination': address});
     if (!await canLaunchUrl(uri)) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

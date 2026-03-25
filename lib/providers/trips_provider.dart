@@ -36,7 +36,7 @@ class TripsNotifier extends StateNotifier<TripsState> {
         return;
       }
       final List<dynamic> list = jsonDecode(raw as String);
-      final trips = list
+      var trips = list
           .map((e) {
             try {
               return Trip.fromJson(e as Map<String, dynamic>);
@@ -46,7 +46,27 @@ class TripsNotifier extends StateNotifier<TripsState> {
           })
           .whereType<Trip>()
           .toList();
+      // Fix legacy data: assign unique IDs to trips that have empty IDs
+      bool needsSave = false;
+      trips = trips.map((t) {
+        if (t.id.isEmpty) {
+          needsSave = true;
+          return t.copyWith(id: _uuid.v4());
+        }
+        return t;
+      }).toList();
+      // Auto-purge: permanently remove trips deleted more than 30 days ago
+      final purgeThreshold = DateTime.now().subtract(const Duration(days: 30));
+      final beforePurge = trips.length;
+      trips = trips.where((t) {
+        if (!t.isDeleted || t.deletedAt == null) return true;
+        final deletedAt = DateTime.tryParse(t.deletedAt!);
+        return deletedAt == null || deletedAt.isAfter(purgeThreshold);
+      }).toList();
+      if (trips.length < beforePurge) needsSave = true;
+
       state = _compute(trips);
+      if (needsSave) _save(trips);
     } catch (_) {
       state = const TripsState();
     }
@@ -83,13 +103,18 @@ class TripsNotifier extends StateNotifier<TripsState> {
   }
 
   void updateTrip(String id, Trip updated) {
+    // Guard: never match on empty ID – it would replace ALL trips without IDs
+    if (id.isEmpty) return;
     final trips = _all.map((t) => t.id == id ? updated : t).toList();
     state = _compute(trips);
     _save(trips);
   }
 
   void deleteTrip(String id) {
-    final trips = _all.map((t) => t.id == id ? t.copyWith(isDeleted: true) : t).toList();
+    final now = DateTime.now().toIso8601String();
+    final trips = _all.map((t) => t.id == id
+        ? t.copyWith(isDeleted: true, deletedAt: now)
+        : t).toList();
     state = _compute(trips);
     _save(trips);
   }
@@ -182,6 +207,18 @@ class TripsNotifier extends StateNotifier<TripsState> {
   }
 
   void loadTrips(List<Trip> trips) {
+    // Ensure every trip has a unique ID – imported trips often arrive with id: ''
+    final fixed = trips.map((t) => t.id.isEmpty ? t.copyWith(id: _uuid.v4()) : t).toList();
+    state = _compute(fixed);
+    _save(fixed);
+  }
+
+  /// Removes vehicleId reference from all trips that reference a deleted vehicle.
+  void clearVehicleReferences(String vehicleId) {
+    if (vehicleId.isEmpty) return;
+    final trips = _all.map((t) =>
+      t.vehicleId == vehicleId ? t.copyWith(vehicleId: null) : t,
+    ).toList();
     state = _compute(trips);
     _save(trips);
   }

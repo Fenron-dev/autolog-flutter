@@ -339,14 +339,35 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   void _confirmDeleteVehicle(BuildContext context, WidgetRef ref, Vehicle v) {
+    final tripCount = ref.read(tripsProvider).activeTrips
+        .where((t) => t.vehicleId == v.id).length;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Fahrzeug löschen'),
-        content: Text('${v.name} wirklich löschen?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${v.name} wirklich löschen?'),
+            if (tripCount > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                '$tripCount Fahrt${tripCount == 1 ? '' : 'en'} '
+                '${tripCount == 1 ? 'ist' : 'sind'} diesem Fahrzeug zugeordnet. '
+                'Die Zuordnung wird entfernt.',
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
-          TextButton(onPressed: () { Navigator.pop(ctx); ref.read(vehiclesProvider.notifier).deleteVehicle(v.id); }, child: const Text('Löschen', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () {
+            Navigator.pop(ctx);
+            ref.read(tripsProvider.notifier).clearVehicleReferences(v.id);
+            ref.read(vehiclesProvider.notifier).deleteVehicle(v.id);
+          }, child: const Text('Löschen', style: TextStyle(color: Colors.red))),
         ],
       ),
     );

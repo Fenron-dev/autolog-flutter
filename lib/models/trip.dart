@@ -17,6 +17,7 @@ class Trip {
   final bool isLogged;
   final String notes;
   final bool isDeleted;
+  final String? deletedAt; // ISO timestamp – for auto-purge after 30 days
   final String? vehicleId;
 
   const Trip({
@@ -33,6 +34,7 @@ class Trip {
     required this.isLogged,
     this.notes = '',
     this.isDeleted = false,
+    this.deletedAt,
     this.vehicleId,
   });
 
@@ -50,6 +52,7 @@ class Trip {
     bool? isLogged,
     String? notes,
     bool? isDeleted,
+    Object? deletedAt = _sentinel,
     Object? vehicleId = _sentinel,
   }) {
     return Trip(
@@ -66,6 +69,7 @@ class Trip {
       isLogged: isLogged ?? this.isLogged,
       notes: notes ?? this.notes,
       isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt == _sentinel ? this.deletedAt : deletedAt as String?,
       vehicleId: vehicleId == _sentinel ? this.vehicleId : vehicleId as String?,
     );
   }
@@ -84,15 +88,25 @@ class Trip {
     'isLogged': isLogged,
     'notes': notes,
     'isDeleted': isDeleted,
+    'deletedAt': deletedAt,
     'vehicleId': vehicleId,
   };
 
+  static final _dateRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+  static final _timeRegex = RegExp(r'^\d{2}:\d{2}$');
+
   factory Trip.fromJson(Map<String, dynamic> json) {
+    final rawDate = json['date'] as String? ?? '';
+    // Validate date format: must be YYYY-MM-DD and parseable
+    final date = (_dateRegex.hasMatch(rawDate) && DateTime.tryParse(rawDate) != null)
+        ? rawDate : '';
+    final rawStart = json['startTime'] as String? ?? '';
+    final rawEnd = json['endTime'] as String? ?? '';
     return Trip(
       id: json['id'] as String? ?? const Uuid().v4(),
-      date: json['date'] as String? ?? '',
-      startTime: json['startTime'] as String? ?? '',
-      endTime: json['endTime'] as String? ?? '',
+      date: date,
+      startTime: _timeRegex.hasMatch(rawStart) ? rawStart : '',
+      endTime: _timeRegex.hasMatch(rawEnd) ? rawEnd : '',
       destinationName: json['destinationName'] as String? ?? '',
       destinationAddress: json['destinationAddress'] as String? ?? '',
       distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
@@ -102,6 +116,7 @@ class Trip {
       isLogged: json['isLogged'] as bool? ?? false,
       notes: json['notes'] as String? ?? '',
       isDeleted: json['isDeleted'] as bool? ?? false,
+      deletedAt: json['deletedAt'] as String?,
       vehicleId: json['vehicleId'] as String?,
     );
   }

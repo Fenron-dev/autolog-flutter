@@ -15,8 +15,14 @@ class NotificationService {
   final _plugin = FlutterLocalNotificationsPlugin();
 
   /// Stream that emits notification action IDs (e.g. 'pause', 'end_trip').
-  final _actions = StreamController<String>.broadcast();
-  Stream<String> get actions => _actions.stream;
+  /// Recreated on demand if closed (e.g. after app lifecycle destroy/recreate).
+  StreamController<String> _actions = StreamController<String>.broadcast();
+  Stream<String> get actions {
+    if (_actions.isClosed) {
+      _actions = StreamController<String>.broadcast();
+    }
+    return _actions.stream;
+  }
 
   // Notification channel / IDs
   static const _channelId = 'autolog_trip';
@@ -54,6 +60,9 @@ class NotificationService {
   void handleActionResponse(NotificationResponse response) {
     final actionId = response.actionId;
     if (actionId != null && actionId.isNotEmpty) {
+      if (_actions.isClosed) {
+        _actions = StreamController<String>.broadcast();
+      }
       _actions.add(actionId);
     }
   }

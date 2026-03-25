@@ -121,7 +121,7 @@ class TripCard extends StatelessWidget {
   }
 
   void _openMaps(String address) async {
-    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(address)}');
+    final uri = Uri.https('www.google.com', '/maps/dir/', {'api': '1', 'destination': address});
     if (await canLaunchUrl(uri)) launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

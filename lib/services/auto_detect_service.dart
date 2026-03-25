@@ -84,7 +84,11 @@ class AutoDetectService {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
+  bool _isStarting = false;
+
   Future<void> startMonitoring(AppSettings settings) async {
+    if (_isStarting) return; // Prevent overlapping start calls
+    _isStarting = true;
     await stopMonitoring();
     // Listen for notification button presses (Resume / End Trip)
     _notifActionSub = NotificationService.instance.actions.listen(_handleNotificationAction);
@@ -95,6 +99,7 @@ class AutoDetectService {
     if (settings.bluetoothDetectionEnabled) {
       await _startBluetooth(settings);
     }
+    _isStarting = false;
   }
 
   Future<void> stopMonitoring() async {
@@ -188,6 +193,9 @@ class AutoDetectService {
   }
 
   void _startManualGpsTracking() async {
+    // Cancel any existing GPS subscription before creating a new one
+    await _gpsSub?.cancel();
+    _gpsSub = null;
     try {
       final androidSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,

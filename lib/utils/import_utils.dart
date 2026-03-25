@@ -56,10 +56,29 @@ Future<List<Trip>?> importFromJsonFile(
     }
     // AutoLog JSON-Backup (Liste von Trips)
     else if (json is List) {
-      trips = json
-          .map((e) { try { return Trip.fromJson(e as Map<String, dynamic>); } catch (_) { return null; } })
-          .whereType<Trip>()
-          .toList();
+      int skipped = 0;
+      for (final e in json) {
+        try {
+          if (e is! Map<String, dynamic>) { skipped++; continue; }
+          final trip = Trip.fromJson(e);
+          // Basis-Validierung: Datum muss gültig sein
+          if (trip.date.isEmpty || DateTime.tryParse(trip.date) == null) {
+            skipped++;
+            continue;
+          }
+          trips.add(trip);
+        } catch (_) {
+          skipped++;
+        }
+      }
+      if (skipped > 0 && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$skipped Einträge übersprungen (ungültiges Format).'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
 
     if (trips.isEmpty && context.mounted) {
@@ -155,14 +174,14 @@ List<Trip> _parseSemanticSegments(List<dynamic> segments) {
       date: startDt.toIso8601String().substring(0, 10),
       startTime: _formatTime(startDt),
       endTime: _formatTime(endDt),
-      destinationName: destName.isEmpty ? 'Google Import' : destName,
-      destinationAddress: destAddress,
+      destinationName: _clamp(destName.isEmpty ? 'Google Import' : destName, 200),
+      destinationAddress: _clamp(destAddress),
       distanceKm: distanceM / 1000.0,
       type: TripType.business,
       status: TripStatus.completed,
       isBilled: false,
       isLogged: false,
-      notes: 'Importiert aus Google Zeitachse ($type)',
+      notes: _clamp('Importiert aus Google Zeitachse ($type)'),
       vehicleId: null,
     ));
   }
@@ -206,14 +225,14 @@ List<Trip> _parseTimelineObjects(List<dynamic> objects) {
       date: startDt.toLocal().toIso8601String().substring(0, 10),
       startTime: _formatTime(startDt.toLocal()),
       endTime: _formatTime(endDt.toLocal()),
-      destinationName: destName,
-      destinationAddress: destAddress,
+      destinationName: _clamp(destName, 200),
+      destinationAddress: _clamp(destAddress),
       distanceKm: distanceM / 1000.0,
       type: TripType.business,
       status: TripStatus.completed,
       isBilled: false,
       isLogged: false,
-      notes: 'Importiert aus Google Timeline ($actType)',
+      notes: _clamp('Importiert aus Google Timeline ($actType)'),
       vehicleId: null,
     ));
   }
@@ -222,6 +241,10 @@ List<Trip> _parseTimelineObjects(List<dynamic> objects) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// Begrenzt String-Länge für importierte Felder (verhindert überdimensionierte Daten)
+String _clamp(String value, [int maxLength = 500]) =>
+    value.length > maxLength ? value.substring(0, maxLength) : value;
 
 String _formatTime(DateTime dt) =>
     '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
